@@ -1,0 +1,57 @@
+SELECT OE.OFFER_ID,
+  OE.LOB_ID,
+  EO.OWNER_ID,
+  OE.EVAL_STATE,
+  OE.CREATED_ON,
+  JSON_VALUE(EVAL_DOCUMENT,'$.solutions[0].capabilityDetailsList[0].capabilityDateDetails.optimalTransit.legTransitTimeList[0].originGeography.pricingRegion') 
+  ORI_PRC_REGION,
+  JSON_VALUE(EVAL_DOCUMENT,'$.solutions[0].capabilityDetailsList[0].capabilityDateDetails.optimalTransit.legTransitTimeList[0].destinationGeography.pricingRegion') 
+  DEST_PRC_REGION,
+  ED.*,
+  SD.DLTDLCREMAINING
+FROM JSONTABLE1 OE,
+  JSONTABLE2 EO,
+  JSON_TABLE (OE.EVAL_DOCUMENT,'$' 
+  COLUMNS 
+  ( 
+  "EVAL_STATUS" PATH '$.status', 
+  NESTED PATH '$.solutions_summary[*]' 
+    COLUMNS 
+    (
+    "CAPABILITY_NAME" PATH '$.capabilityName', 
+    "BOND_TYPE" PATH '$.evaluationDetails.bond_type', 
+    "SOL_DATE" PATH '$.date', 
+    "RECOMMENDATION" PATH '$.evaluationDetails.recommendation', 
+    "DLC_FCTE_THRESHLD" PATH '$.evaluationDetails.dlc.fcte_threshold', 
+    "DLT_FCTE_THRESHLD" PATH '$.evaluationDetails.dlt.fcte_threshold', 
+    "NON_DLT_FCTE_THRESHLD" PATH '$.evaluationDetails.non_dlt.fcte_threshold', 
+    "CAPABILITY" PATH '$.evaluationDetails.capability', 
+    "DEST_PROFIT_AVG" PATH '$.evaluationDetails.score_components.avg_profit_dest', 
+    "ORI_PROFIT_AVG" PATH '$.evaluationDetails.score_components.avg_profit_orig', 
+    "COMPANY_SCORE" PATH '$.evaluationDetails.score_components.co_score', 
+    "DIRECT_COST" PATH '$.evaluationDetails.score_components.direct_cost', 
+    "EST_NETWORK_COST" PATH '$.evaluationDetails.score_components.est_network_cost', 
+    "EST_OO_REV_PRCNT" PATH
+  '$.evaluationDetails.score_components.est_oo_revenue_pct', 
+  "OO_PROB" PATH '$.evaluationDetails.score_components.oo_prob', 
+  "OO_SCORE" PATH '$.evaluationDetails.score_components.oo_score', 
+  "REVENEUE" PATH '$.evaluationDetails.score_components.revenue',
+  "CONT_AT_ACCEPTANCE_SCORE" PATH '$.evaluationDetails.score_components.score', 
+  "TRANSIT_HOURS" PATH '$.evaluationDetails.score_components.predictive_transit_hours' 
+  ) ) ) AS ED,
+  JSON_TABLE (OE.EVAL_DOCUMENT,'$' 
+  COLUMNS 
+  ( 
+    NESTED PATH '$.solutions[*].capabilityDetailsList[*]' 
+    COLUMNS 
+      ("DLTDLCREMAINING" PATH '$.solutionCapabilityDateDetails.dltDetails.dltDlcRemaining', 
+      "CAPABILITY_NAME" PATH '$.executionType', 
+      "SOL_DATE" PATH '$.date' ) 
+  ) 
+ ) AS SD
+WHERE ED.CAPABILITY_NAME = SD.CAPABILITY_NAME
+AND ED.SOL_DATE          = SUBSTR(SD.SOL_DATE,1,10)
+AND OE.LOB_ID            = EO.LINE_OF_BUSINESS
+AND OE.OFFER_ID          = EO.OFFER_ID
+AND OE.CREATED_ON        > SYSDATE -   &COUNT_OF_DAYS
+AND UPPER(EO.OWNER_ID) LIKE UPPER('&OWNER_ID');
